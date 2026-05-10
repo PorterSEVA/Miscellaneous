@@ -460,7 +460,7 @@
       word-wrap: break-word;
       position: relative;
       white-space: pre-wrap;
-      padding-right: 45px;
+      padding-right: 14px;
     }
 
     .message.user .message-content {
@@ -998,499 +998,151 @@
     const chatInput = document.getElementById('chatInput');
     const sendBtn = document.getElementById('sendBtn');
     const stopBtn = document.getElementById('stopBtn');
-    const toast = document.getElementById('toast');
     const menuBtn = document.getElementById('menuBtn');
     const settingsPanel = document.getElementById('settingsPanel');
     const settingsOverlay = document.getElementById('settingsOverlay');
     const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+    const clearChatBtn = document.getElementById('clearChatBtn');
+    const toast = document.getElementById('toast');
+    const systemPromptInput = document.getElementById('systemPrompt');
     const temperatureSlider = document.getElementById('temperature');
     const tempValue = document.getElementById('tempValue');
     const maxTokensInput = document.getElementById('maxTokens');
-    const systemPromptInput = document.getElementById('systemPrompt');
+    const apiKeysTable = document.getElementById('apiKeysTable');
     const presetsSelect = document.getElementById('presets');
-    const clearChatBtn = document.getElementById('clearChatBtn');
-    const apiKeysTable = document.getElementById('apiKeysTable').querySelector('tbody');
 
-    let isGenerating = false;
-    let conversation = [];
-    let abortController = null;
-
-    // API Key 1
     const API_KEY_1 = '';
-    
-    // API Key 2
     const API_KEY_2 = '';
-    
-    // API Key 3
     const API_KEY_3 = '';
-    
-    // API Key 4
     const API_KEY_4 = '';
-    
-    // API Key 5
     const API_KEY_5 = '';
-    
-    // API Key 6
     const API_KEY_6 = '';
-    
-    // API Key 7
     const API_KEY_7 = '';
-    
-    // API Key 8
     const API_KEY_8 = '';
-    
-    // API Key 9
     const API_KEY_9 = '';
-    
-    // API Key 10
     const API_KEY_10 = '';
 
-    const API_KEYS = [API_KEY_1, API_KEY_2, API_KEY_3, API_KEY_4, API_KEY_5, API_KEY_6, API_KEY_7, API_KEY_8, API_KEY_9, API_KEY_10];
+    const API_KEYS = [API_KEY_1, API_KEY_2, API_KEY_3, API_KEY_4, API_KEY_5, API_KEY_6, API_KEY_7, API_KEY_8, API_KEY_9, API_KEY_10].filter(k => k && k.trim() !== '');
 
-    // Error type detection
-    function getErrorType(errorData, statusCode) {
-      if (statusCode === 429) {
-        return 'quota_exceeded';
-      }
-      
-      const errorMessage = errorData?.error?.message || '';
-      const errorCode = errorData?.error?.code || '';
-      
-      if (errorCode === 403 || errorMessage.toLowerCase().includes('disabled') || errorMessage.toLowerCase().includes('blocked')) {
-        return 'key_disabled';
-      }
-      
-      if (errorCode === 400 || errorMessage.toLowerCase().includes('invalid') || errorMessage.toLowerCase().includes('malformed')) {
-        return 'invalid_key';
-      }
-      
-      if (errorMessage.toLowerCase().includes('high demand') || errorMessage.toLowerCase().includes('resource_exhausted')) {
-        return 'high_demand';
-      }
-      
-      return 'unknown_error';
-    }
+    let currentKeyIndex = 0;
+    let keyStatuses = {};
+    let attemptedKeysThisCycle = new Set();
+    let hasCheckedAllKeysThisCycle = false;
+    let isStreamingResponse = false;
 
-    function getErrorMessage(errorType) {
-      const messages = {
-        quota_exceeded: 'Quota Exceeded',
-        key_disabled: 'Key Disabled/Exposed',
-        invalid_key: 'Invalid Key',
-        high_demand: 'High Demand',
-        unknown_error: 'Unknown Error'
-      };
-      return messages[errorType] || 'Unknown Error';
-    }
-
-    // API Key Management System
-    const API_KEY_MANAGER = {
-      keys: [],
-      currentKeyIndex: 0,
-      attemptedKeysIndices: new Set(),
-      hasTriedAllKeys: false,
-
-      init() {
-        this.keys = API_KEYS.map((key, index) => ({
-          index: index,
-          key: key,
-          status: 'idle',
-          errorType: null
-        })).filter(k => k.key && k.key.trim() !== '');
-        
-        if (this.keys.length === 0) {
-          return;
-        }
-
-        this.currentKeyIndex = this.getLastUsedKeyIndex();
-        this.attemptedKeysIndices = new Set();
-        this.hasTriedAllKeys = false;
-        this.updateUI();
-      },
-
-      getCurrentKey() {
-        if (this.keys.length === 0) return '';
-        return this.keys[this.currentKeyIndex]?.key || '';
-      },
-
-      getCurrentKeyIndex() {
-        if (this.keys.length === 0) return -1;
-        return this.keys[this.currentKeyIndex]?.index || 0;
-      },
-
-      markKeyAsActive(keyIndex) {
-        const keyObj = this.keys.find(k => k.index === keyIndex);
-        if (keyObj) {
-          this.keys.forEach(k => k.status = 'idle');
-          keyObj.status = 'active';
-          keyObj.errorType = null;
-          this.currentKeyIndex = this.keys.indexOf(keyObj);
-          this.attemptedKeysIndices.clear();
-          this.hasTriedAllKeys = false;
-          localStorage.setItem('lastUsedKeyIndex', keyIndex.toString());
-          this.updateUI();
-        }
-      },
-
-      markKeyAsError(keyIndex, errorType) {
-        const keyObj = this.keys.find(k => k.index === keyIndex);
-        if (keyObj) {
-          keyObj.status = 'error';
-          keyObj.errorType = errorType;
-          this.attemptedKeysIndices.add(keyObj.index);
-          this.updateUI();
-        }
-      },
-
-      switchToNextAvailableKey() {
-        if (this.keys.length === 0) {
-          return -1;
-        }
-
-        // Check if we've already tried all keys
-        if (this.hasTriedAllKeys) {
-          return -1;
-        }
-
-        // Check if we've tried all available keys in one cycle
-        if (this.attemptedKeysIndices.size >= this.keys.length) {
-          this.hasTriedAllKeys = true;
-          return -1;
-        }
-
-        // Find next key that we haven't tried yet
-        for (let i = 0; i < this.keys.length; i++) {
-          const nextIndex = (this.currentKeyIndex + 1 + i) % this.keys.length;
-          const keyObj = this.keys[nextIndex];
-          
-          if (!this.attemptedKeysIndices.has(keyObj.index)) {
-            this.currentKeyIndex = nextIndex;
-            this.attemptedKeysIndices.add(keyObj.index);
-            this.markKeyAsError(keyObj.index, 'unknown_error');
-            return keyObj.index;
-          }
-        }
-
-        this.hasTriedAllKeys = true;
-        return -1;
-      },
-
-      resetForNewMessage() {
-        this.attemptedKeysIndices.clear();
-        this.hasTriedAllKeys = false;
-        // Mark current key as having attempted
-        this.attemptedKeysIndices.add(this.getCurrentKeyIndex());
-      },
-
-      getLastUsedKeyIndex() {
-        const saved = localStorage.getItem('lastUsedKeyIndex');
-        if (saved && this.keys.length > 0) {
-          const index = parseInt(saved);
-          const keyObj = this.keys.find(k => k.index === index);
-          if (keyObj) {
-            return this.keys.indexOf(keyObj);
-          }
-        }
-        return 0;
-      },
-
-      updateUI() {
-        apiKeysTable.innerHTML = '';
-        this.keys.forEach((keyData) => {
-          const row = document.createElement('tr');
-          
-          const keyCell = document.createElement('td');
-          const statusIndicator = document.createElement('div');
-          statusIndicator.className = 'status-indicator';
-          if (keyData.status === 'active') {
-            statusIndicator.classList.add('active');
-          } else if (keyData.status === 'error') {
-            statusIndicator.classList.add('error');
-          }
-          
-          keyCell.appendChild(statusIndicator);
-          keyCell.appendChild(document.createTextNode(`API Key ${keyData.index + 1}`));
-          
-          const statusCell = document.createElement('td');
-          if (keyData.status === 'active') {
-            statusCell.textContent = 'Active';
-          } else if (keyData.status === 'error' && keyData.errorType) {
-            statusCell.textContent = getErrorMessage(keyData.errorType);
-          } else if (keyData.status === 'error') {
-            statusCell.textContent = 'Error';
-          } else {
-            statusCell.textContent = 'Idle';
-          }
-          
-          row.appendChild(keyCell);
-          row.appendChild(statusCell);
-          apiKeysTable.appendChild(row);
-        });
-      }
-    };
-
-    // Conversation Presets
-    const PRESETS = {
-      default: {
-        name: 'Default Assistant',
-        systemPrompt: 'You are a helpful AI assistant. Provide clear, accurate, and concise answers to the user\'s questions.'
-      },
-      teacher: {
-        name: 'Brilliant Teacher',
-        systemPrompt: `You are an exceptional and patient educator with the ability to explain complex concepts in simple, engaging ways. Your teaching style includes:
-- Breaking down difficult topics into digestible parts
-- Using real-world examples and analogies
-- Asking questions to check understanding
-- Encouraging curiosity and deeper learning
-- Providing step-by-step guidance
-- Adapting explanations to different learning styles
-Always prioritize clarity and engagement over technical jargon. Make learning enjoyable and intuitive.`
-      },
-      developer: {
-        name: 'Expert Developer',
-        systemPrompt: `You are a senior software engineer with 15+ years of experience across multiple languages and frameworks. Your expertise includes:
-- Writing clean, efficient, production-ready code
-- Following SOLID principles and design patterns
-- Optimizing for performance and scalability
-- Security best practices and vulnerability prevention
-- Code review and best practices
-- Architecture and system design
-- Debugging and troubleshooting
-Be pragmatic, direct, and focus on practical solutions. Provide code examples when relevant. Consider edge cases and potential issues.`
-      },
-      engineer: {
-        name: 'Fact-Driven Engineer',
-        systemPrompt: `You are a rigorous engineer who values evidence, data, and empirical observation. Your approach includes:
-- Basing solutions on verified research and proven methodologies
-- Distinguishing between facts, assumptions, and specifications
-- Explaining technical reasoning and engineering principles
-- Acknowledging limitations and tolerances
-- Correcting misconceptions with evidence
-- Explaining complex engineering concepts accurately
-- Being precise with measurements and standards
-Always base responses on verified technical data and engineering best practices. Be precise with terminology and explain your reasoning clearly.`
-      },
-      religion: {
-        name: 'Religious Expert',
-        systemPrompt: `You are a knowledgeable and respectful expert on world religions and spirituality. Your approach includes:
-- Speaking with respect and reverence about all faiths
-- Providing accurate historical and theological information
-- Acknowledging the diversity within religions
-- Explaining beliefs, practices, and traditions clearly
-- Being courteous and non-judgmental toward all traditions
-- Recognizing the spiritual significance to believers
-- Contextualizing religious concepts appropriately
-- Encouraging interfaith understanding and dialogue
-Always maintain respect for all religions and spiritual traditions. Be inclusive, accurate, and promote understanding between different faiths.`
-      },
-      creative: {
-        name: 'Creative Visionary',
-        systemPrompt: `You are a highly creative thinker who challenges conventional wisdom and explores innovative possibilities. Your approach includes:
-- Thinking outside the box and considering unconventional solutions
-- Encouraging experimentation and taking calculated risks
-- Building on ideas without immediately dismissing them
-- Using metaphors, analogies, and thought experiments
-- Exploring multiple perspectives and "what-if" scenarios
-- Brainstorming and ideation
-- Combining ideas in novel ways
-Embrace creativity, imagination, and novel approaches. Encourage bold thinking while remaining thoughtful about feasibility.`
-      },
-      professional: {
-        name: 'Professional Advisor',
-        systemPrompt: `You are a seasoned business professional and consultant with expertise across industries. Your approach includes:
-- Providing strategic and tactical advice
-- Focusing on ROI, efficiency, and outcomes
-- Understanding market dynamics and competition
-- Offering leadership and management insights
-- Considering business implications and risks
-- Being concise and results-oriented
-- Recommending actionable next steps
-Provide pragmatic, business-focused guidance. Be direct and focus on tangible results and impact.`
-      },
-      analyst: {
-        name: 'Data Analyst',
-        systemPrompt: `You are an expert data analyst skilled in statistical analysis, data interpretation, and insights discovery. Your approach includes:
-- Asking clarifying questions about data context
-- Explaining statistical concepts clearly
-- Identifying patterns, trends, and anomalies
-- Recommending appropriate analytical methods
-- Discussing data limitations and confidence levels
-- Providing actionable insights from data
-- Suggesting visualization approaches
-Focus on accurate, evidence-based analysis. Question assumptions and help interpret results properly.`
-      },
-      tutor: {
-        name: 'Patient Tutor',
-        systemPrompt: `You are a dedicated tutor known for infinite patience and ability to meet students where they are. Your approach includes:
-- Meeting learners at their level of understanding
-- Providing encouragement and positive reinforcement
-- Taking time to explain repeatedly without frustration
-- Using varied examples and practice problems
-- Identifying knowledge gaps and addressing them
-- Celebrating progress and effort
-- Customizing explanations to individual needs
-Be warm, encouraging, and never condescending. Adapt your pace and explanations based on understanding shown.`
-      }
-    };
-
-    // Settings defaults
-    const DEFAULT_SETTINGS = {
-      temperature: 0.7,
-      maxTokens: 2048,
-      systemPrompt: ''
-    };
-
-    // Load settings from localStorage
-    function loadSettings() {
-      const saved = localStorage.getItem('chatbotSettings');
+    function loadCurrentKeyIndex() {
+      const saved = localStorage.getItem('currentKeyIndex');
       if (saved) {
-        const settings = JSON.parse(saved);
-        temperatureSlider.value = settings.temperature || DEFAULT_SETTINGS.temperature;
-        maxTokensInput.value = settings.maxTokens || DEFAULT_SETTINGS.maxTokens;
-        systemPromptInput.value = settings.systemPrompt || DEFAULT_SETTINGS.systemPrompt;
-        updateTempDisplay();
+        currentKeyIndex = parseInt(saved);
+        if (currentKeyIndex >= API_KEYS.length) {
+          currentKeyIndex = 0;
+        }
+      } else {
+        currentKeyIndex = 0;
       }
+      renderApiKeyStatus();
     }
 
-    // Save settings to localStorage
-    function saveSettings() {
-      const settings = {
-        temperature: parseFloat(temperatureSlider.value),
-        maxTokens: parseInt(maxTokensInput.value),
-        systemPrompt: systemPromptInput.value
-      };
-      localStorage.setItem('chatbotSettings', JSON.stringify(settings));
+    function saveCurrentKeyIndex() {
+      localStorage.setItem('currentKeyIndex', currentKeyIndex.toString());
     }
 
-    function updateTempDisplay() {
-      tempValue.textContent = temperatureSlider.value;
-    }
-
-    // Settings Panel Controls
-    menuBtn.addEventListener('click', () => {
-      settingsPanel.classList.add('open');
-      settingsOverlay.classList.add('open');
-    });
-
-    closeSettingsBtn.addEventListener('click', () => {
-      settingsPanel.classList.remove('open');
-      settingsOverlay.classList.remove('open');
-      saveSettings();
-    });
-
-    settingsOverlay.addEventListener('click', () => {
-      settingsPanel.classList.remove('open');
-      settingsOverlay.classList.remove('open');
-      saveSettings();
-    });
-
-    temperatureSlider.addEventListener('input', updateTempDisplay);
-
-    clearChatBtn.addEventListener('click', () => {
-      if (confirm('Are you sure you want to clear all messages?')) {
-        conversation = [];
-        messages.innerHTML = '';
-        messages.classList.add('hidden');
-        welcome.classList.remove('hidden');
-        chatContainer.scrollTop = 0;
-        showToast('Conversation cleared', true);
-      }
-    });
-
-    presetsSelect.addEventListener('change', (e) => {
-      if (e.target.value !== 'none' && PRESETS[e.target.value]) {
-        systemPromptInput.value = PRESETS[e.target.value].systemPrompt;
-        saveSettings();
-      }
-    });
-
-    // Copy to clipboard function (GitHub method)
-    async function copyToClipboard(text) {
-      try {
-        await navigator.clipboard.writeText(text);
-
-      } catch (err) {
-        console.log('Clipboard API failed, using fallback method');
-        fallbackCopyToClipboard(text);
-      }
-    }
-
-    // Fallback copy method
-    function fallbackCopyToClipboard(text) {
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      textarea.style.pointerEvents = 'none';
-
-      document.body.appendChild(textarea);
-      textarea.select();
-
-      try {
-        document.execCommand('copy');
-
-      } catch (err) {
-        console.error('Copy failed:', err);
-      } finally {
-        document.body.removeChild(textarea);
-      }
-    }
-
-    // Auto-resize textarea and reset after send
-    function resizeTextarea() {
+    function adjustTextareaHeight() {
       chatInput.style.height = 'auto';
-      chatInput.style.height = Math.min(chatInput.scrollHeight, 100) + 'px';
+      const scrollHeight = chatInput.scrollHeight;
+      chatInput.style.height = Math.min(scrollHeight, 100) + 'px';
     }
 
-    function resetTextarea() {
-      chatInput.value = '';
-      chatInput.style.height = 'auto';
+    function resetTextareaHeight() {
       chatInput.style.height = '20px';
     }
 
-    // Message Display Functions
-    function addMessage(content, isUser = false) {
-      if (!messages.classList.contains('hidden') === false) {
-        messages.classList.remove('hidden');
-        welcome.classList.add('hidden');
+    chatInput.addEventListener('input', adjustTextareaHeight);
+
+    chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const start = chatInput.selectionStart;
+        const end = chatInput.selectionEnd;
+        chatInput.value = chatInput.value.substring(0, start) + '\n' + chatInput.value.substring(end);
+        chatInput.selectionStart = chatInput.selectionEnd = start + 1;
+        adjustTextareaHeight();
+      } else if (e.key === 'Enter' && e.shiftKey) {
+        setTimeout(adjustTextareaHeight, 0);
+      }
+    });
+
+    sendBtn.addEventListener('click', sendMessage);
+
+    async function sendMessage() {
+      const message = chatInput.value.trim();
+      if (!message) return;
+
+      if (API_KEYS.length === 0) {
+        showToast('No API keys configured', 'error');
+        return;
       }
 
-      const messageDiv = document.createElement('div');
-      messageDiv.className = `message ${isUser ? 'user' : 'ai'}`;
+      if (!welcome.classList.contains('hidden')) {
+        welcome.classList.add('hidden');
+        messages.classList.remove('hidden');
+      }
 
-      const avatar = document.createElement('div');
-      avatar.className = 'message-avatar';
-      avatar.textContent = isUser ? '👤' : '🤖';
+      addMessage(message, 'user');
+      chatInput.value = '';
+      resetTextareaHeight();
+
+      attemptedKeysThisCycle = new Set();
+      hasCheckedAllKeysThisCycle = false;
+
+      sendBtn.disabled = true;
+      stopBtn.classList.add('show');
+
+      await getAIResponse(message);
+
+      sendBtn.disabled = false;
+      stopBtn.classList.remove('show');
+      isStreamingResponse = false;
+    }
+
+    function addMessage(content, role) {
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `message ${role}`;
+
+      const avatarDiv = document.createElement('div');
+      avatarDiv.className = 'message-avatar';
+      avatarDiv.textContent = role === 'user' ? '👤' : '🤖';
 
       const contentDiv = document.createElement('div');
       contentDiv.className = 'message-content';
-      contentDiv.textContent = content;
 
-      const copyBtn = document.createElement('button');
-      copyBtn.className = 'copy-button';
-      copyBtn.textContent = '📋';
-      copyBtn.addEventListener('click', async () => {
-        await copyToClipboard(content);
-      });
-      contentDiv.appendChild(copyBtn);
+      if (role === 'ai') {
+        contentDiv.innerHTML = parseMarkdown(content);
+      } else {
+        contentDiv.textContent = content;
+      }
 
-      messageDiv.appendChild(avatar);
+      messageDiv.appendChild(avatarDiv);
       messageDiv.appendChild(contentDiv);
 
-      // Add message actions (delete button)
       const actionsDiv = document.createElement('div');
       actionsDiv.className = 'message-actions';
 
-      const deleteBtn = document.createElement('button');
-      deleteBtn.className = 'action-btn delete';
-      deleteBtn.textContent = '🗑️ Delete';
-      deleteBtn.addEventListener('click', () => {
-        const index = Array.from(messages.children).indexOf(messageDiv);
-        if (index > -1) {
-          messages.removeChild(messageDiv);
-          conversation.splice(index, 1);
-        }
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'action-btn';
+      copyBtn.textContent = 'Copy';
+      copyBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(content);
       });
 
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'action-btn delete';
+      deleteBtn.textContent = 'Delete';
+      deleteBtn.addEventListener('click', () => {
+        messageDiv.remove();
+      });
+
+      actionsDiv.appendChild(copyBtn);
       actionsDiv.appendChild(deleteBtn);
       messageDiv.appendChild(actionsDiv);
 
@@ -1498,283 +1150,238 @@ Be warm, encouraging, and never condescending. Adapt your pace and explanations 
       chatContainer.scrollTop = chatContainer.scrollHeight;
     }
 
-    function formatContent(content) {
-      let html = content
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/```([\s\S]*?)```/g, (match, code) => {
-          const language = code.split('\n')[0].trim();
-          const actualCode = code.replace(/^[^\n]*\n/, '');
-          const codeId = 'code-' + Math.random().toString(36).substr(2, 9);
-          return `<div class="code-wrapper" id="${codeId}"><button class="code-copy-button" data-target="${codeId}">📋</button><code>${actualCode}</code></div>`;
-        })
-        .replace(/`([^`]+)`/g, '<code>$1</code>');
+    function parseMarkdown(text) {
+      let html = text;
 
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = html;
+      html = html.replace(/```([\s\S]*?)```/g, (match, code) => {
+        const trimmedCode = code.trim();
+        return `<div class="code-wrapper"><code>${escapeHtml(trimmedCode)}</code><button class="code-copy-button" onclick="copyCodeContent(this)">📋</button></div>`;
+      });
 
-      // Handle code block copy buttons
-      tempDiv.querySelectorAll('.code-copy-button[data-target]').forEach(btn => {
-        btn.addEventListener('click', async function () {
-          const codeId = this.getAttribute('data-target');
-          const codeBlock = document.getElementById(codeId);
-          if (codeBlock) {
-            const textToCopy = codeBlock.querySelector('code').innerText;
-            await copyToClipboard(textToCopy);
+      html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+      html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+      html = html.replace(/\n/g, '<br>');
+
+      return html;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    window.copyCodeContent = function(button) {
+      const codeElement = button.parentElement.querySelector('code');
+      const text = codeElement.textContent;
+      navigator.clipboard.writeText(text);
+    };
+
+    async function getAIResponse(message) {
+      isStreamingResponse = true;
+
+      while (!hasCheckedAllKeysThisCycle && isStreamingResponse) {
+        const key = API_KEYS[currentKeyIndex];
+
+        if (!key || key.trim() === '') {
+          currentKeyIndex = (currentKeyIndex + 1) % API_KEYS.length;
+          if (attemptedKeysThisCycle.has(currentKeyIndex)) {
+            hasCheckedAllKeysThisCycle = true;
           }
-        });
-      });
-
-      return tempDiv.innerHTML;
-    }
-
-    function addAIMessage(content) {
-      if (!messages.classList.contains('hidden') === false) {
-        messages.classList.remove('hidden');
-        welcome.classList.add('hidden');
-      }
-
-      const messageDiv = document.createElement('div');
-      messageDiv.className = 'message ai';
-
-      const avatar = document.createElement('div');
-      avatar.className = 'message-avatar';
-      avatar.textContent = '🤖';
-
-      const contentDiv = document.createElement('div');
-      contentDiv.className = 'message-content';
-      contentDiv.innerHTML = formatContent(content);
-
-      const copyBtn = document.createElement('button');
-      copyBtn.className = 'copy-button';
-      copyBtn.textContent = '📋';
-      copyBtn.addEventListener('click', async () => {
-        await copyToClipboard(content);
-      });
-      contentDiv.appendChild(copyBtn);
-
-      messageDiv.appendChild(avatar);
-      messageDiv.appendChild(contentDiv);
-
-      // Add message actions (delete button)
-      const actionsDiv = document.createElement('div');
-      actionsDiv.className = 'message-actions';
-
-      const deleteBtn = document.createElement('button');
-      deleteBtn.className = 'action-btn delete';
-      deleteBtn.textContent = '🗑️ Delete';
-      deleteBtn.addEventListener('click', () => {
-        const index = Array.from(messages.children).indexOf(messageDiv);
-        if (index > -1) {
-          messages.removeChild(messageDiv);
-          conversation.splice(index, 1);
+          continue;
         }
-      });
 
-      actionsDiv.appendChild(deleteBtn);
-      messageDiv.appendChild(actionsDiv);
+        try {
+          const systemPrompt = systemPromptInput.value || 'You are a helpful AI assistant.';
+          const temperature = parseFloat(temperatureSlider.value);
+          const maxTokens = parseInt(maxTokensInput.value);
 
-      messages.appendChild(messageDiv);
-      chatContainer.scrollTop = chatContainer.scrollHeight;
-    }
+          const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + key, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              systemInstruction: { parts: { text: systemPrompt } },
+              contents: {
+                parts: [{ text: message }],
+              },
+              generationConfig: {
+                temperature: temperature,
+                maxOutputTokens: maxTokens,
+              },
+            }),
+          });
 
-    function showTypingIndicator() {
-      const messageDiv = document.createElement('div');
-      messageDiv.className = 'message ai';
-      messageDiv.id = 'typing-indicator';
+          if (!response.ok) {
+            const errorData = await response.json();
+            let errorType = 'unknown_error';
 
-      const avatar = document.createElement('div');
-      avatar.className = 'message-avatar';
-      avatar.textContent = '🤖';
+            if (response.status === 429) {
+              errorType = 'quota_reached';
+            } else if (response.status === 400 || response.status === 403) {
+              errorType = 'invalid_key';
+            }
 
-      const contentDiv = document.createElement('div');
-      contentDiv.className = 'message-content';
-      contentDiv.innerHTML = '<div class="typing"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
+            keyStatuses[currentKeyIndex] = errorType;
+            updateKeyStatusDisplay(currentKeyIndex);
+            attemptedKeysThisCycle.add(currentKeyIndex);
 
-      messageDiv.appendChild(avatar);
-      messageDiv.appendChild(contentDiv);
-      messages.appendChild(messageDiv);
-      chatContainer.scrollTop = chatContainer.scrollHeight;
-    }
+            if (attemptedKeysThisCycle.size >= API_KEYS.length) {
+              hasCheckedAllKeysThisCycle = true;
+              showToast('All API keys are unavailable', 'error');
+            }
 
-    function removeTypingIndicator() {
-      const typing = document.getElementById('typing-indicator');
-      if (typing) {
-        typing.remove();
+            currentKeyIndex = (currentKeyIndex + 1) % API_KEYS.length;
+            saveCurrentKeyIndex();
+            continue;
+          }
+
+          const data = await response.json();
+          const aiMessage = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response received.';
+
+          keyStatuses[currentKeyIndex] = 'active';
+          updateKeyStatusDisplay(currentKeyIndex);
+          addMessage(aiMessage, 'ai');
+          hasCheckedAllKeysThisCycle = true;
+          saveCurrentKeyIndex();
+
+        } catch (error) {
+          keyStatuses[currentKeyIndex] = 'unknown_error';
+          updateKeyStatusDisplay(currentKeyIndex);
+          attemptedKeysThisCycle.add(currentKeyIndex);
+
+          if (attemptedKeysThisCycle.size >= API_KEYS.length) {
+            hasCheckedAllKeysThisCycle = true;
+            showToast('All API keys are unavailable', 'error');
+          }
+
+          currentKeyIndex = (currentKeyIndex + 1) % API_KEYS.length;
+          saveCurrentKeyIndex();
+        }
       }
     }
 
-    function showToast(message, isSuccess = false) {
+    function updateKeyStatusDisplay(keyIndex) {
+      const rows = apiKeysTable.querySelectorAll('tr');
+      if (rows[keyIndex]) {
+        const statusCell = rows[keyIndex].querySelector('td:last-child');
+        if (statusCell) {
+          const status = keyStatuses[keyIndex] || 'idle';
+          let statusText = 'idle';
+          let statusClass = '';
+
+          if (status === 'active') {
+            statusText = 'active';
+            statusClass = 'active';
+          } else if (status === 'quota_reached') {
+            statusText = 'quota_reached';
+            statusClass = 'error';
+          } else if (status === 'invalid_key') {
+            statusText = 'invalid_key';
+            statusClass = 'error';
+          } else if (status === 'unknown_error') {
+            statusText = 'unknown_error';
+            statusClass = 'error';
+          }
+
+          statusCell.innerHTML = `<span class="status-indicator ${statusClass}"></span>${statusText}`;
+        }
+      }
+    }
+
+    function renderApiKeyStatus() {
+      apiKeysTable.innerHTML = '';
+      API_KEYS.forEach((key, index) => {
+        const row = document.createElement('tr');
+        const status = keyStatuses[index] || 'idle';
+        let statusText = 'idle';
+        let statusClass = '';
+
+        if (status === 'active') {
+          statusText = 'active';
+          statusClass = 'active';
+        } else if (status === 'quota_reached') {
+          statusText = 'quota_reached';
+          statusClass = 'error';
+        } else if (status === 'invalid_key') {
+          statusText = 'invalid_key';
+          statusClass = 'error';
+        } else if (status === 'unknown_error') {
+          statusText = 'unknown_error';
+          statusClass = 'error';
+        }
+
+        row.innerHTML = `
+          <td>API Key ${index + 1}</td>
+          <td><span class="status-indicator ${statusClass}"></span>${statusText}</td>
+        `;
+        apiKeysTable.appendChild(row);
+      });
+    }
+
+    function showToast(message, type = 'error') {
       toast.textContent = message;
-      toast.className = `toast show ${isSuccess ? 'success' : ''}`;
+      toast.className = `toast show ${type}`;
       setTimeout(() => {
         toast.classList.remove('show');
       }, 3000);
     }
 
+    menuBtn.addEventListener('click', () => {
+      settingsPanel.classList.add('open');
+      settingsOverlay.classList.add('open');
+    });
+
+    closeSettingsBtn.addEventListener('click', closeSettings);
+    settingsOverlay.addEventListener('click', closeSettings);
+
+    function closeSettings() {
+      settingsPanel.classList.remove('open');
+      settingsOverlay.classList.remove('open');
+    }
+
+    temperatureSlider.addEventListener('input', () => {
+      tempValue.textContent = temperatureSlider.value;
+    });
+
+    clearChatBtn.addEventListener('click', () => {
+      messages.innerHTML = '';
+      welcome.classList.remove('hidden');
+      messages.classList.add('hidden');
+    });
+
+    presetsSelect.addEventListener('change', (e) => {
+      const presetPrompts = {
+        default: 'You are a helpful AI assistant.',
+        teacher: 'You are a brilliant teacher. Explain concepts clearly and patiently.',
+        developer: 'You are an expert software developer. Provide best practices and clean code.',
+        engineer: 'You are a fact-driven engineer. Be precise and technical.',
+        religion: 'You are a knowledgeable expert in religious studies.',
+        creative: 'You are a creative visionary. Think outside the box.',
+        professional: 'You are a professional advisor. Be concise and businesslike.',
+        analyst: 'You are a data analyst. Focus on insights and patterns.',
+        tutor: 'You are a patient tutor. Break down complex ideas simply.',
+      };
+
+      if (e.target.value !== 'none') {
+        systemPromptInput.value = presetPrompts[e.target.value];
+      }
+    });
+
     function setInput(text) {
       chatInput.value = text;
-      resizeTextarea();
+      adjustTextareaHeight();
       chatInput.focus();
     }
 
-    // API Request with Key Fallback
-    async function sendMessage() {
-      const userMessage = chatInput.value.trim();
-      if (!userMessage || isGenerating) return;
-
-      if (!API_KEY_MANAGER.getCurrentKey()) {
-        showToast('Please configure at least one API key in the code');
-        return;
-      }
-
-      isGenerating = true;
-      resetTextarea();
-      sendBtn.disabled = true;
-      stopBtn.classList.add('show');
-      addMessage(userMessage, true);
-      showTypingIndicator();
-
-      conversation.push({
-        role: 'user',
-        parts: [{ text: userMessage }]
-      });
-
-      API_KEY_MANAGER.resetForNewMessage();
-
-      let lastError = null;
-      let successfulKeyIndex = -1;
-
-      // Try each key, but only once through all keys
-      while (!API_KEY_MANAGER.hasTriedAllKeys) {
-        const currentKey = API_KEY_MANAGER.getCurrentKey();
-        if (!currentKey) {
-          lastError = 'All keys not available';
-          break;
-        }
-
-        try {
-          abortController = new AbortController();
-          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${currentKey}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              contents: conversation,
-              generationConfig: {
-                temperature: parseFloat(temperatureSlider.value),
-                maxOutputTokens: parseInt(maxTokensInput.value)
-              },
-              systemInstruction: {
-                parts: [{ text: systemPromptInput.value || PRESETS.default.systemPrompt }]
-              }
-            }),
-            signal: abortController.signal
-          });
-
-          if (!response.ok) {
-            const errorData = await response.json();
-            const errorType = getErrorType(errorData, response.status);
-
-            API_KEY_MANAGER.markKeyAsError(API_KEY_MANAGER.getCurrentKeyIndex(), errorType);
-            const nextKeyIndex = API_KEY_MANAGER.switchToNextAvailableKey();
-            
-            if (nextKeyIndex === -1) {
-              // All keys have been tried
-              lastError = 'All keys not available';
-              // Reset to Key 1
-              API_KEY_MANAGER.keys.forEach(k => k.status = 'idle');
-              API_KEY_MANAGER.currentKeyIndex = 0;
-              if (API_KEY_MANAGER.keys.length > 0) {
-                API_KEY_MANAGER.keys[0].status = 'idle';
-              }
-              API_KEY_MANAGER.updateUI();
-              break;
-            }
-            
-            showToast(`${getErrorMessage(errorType)}, trying next key...`);
-            continue;
-          }
-
-          const data = await response.json();
-          if (data.candidates && data.candidates[0]?.content?.parts[0]?.text) {
-            const aiResponse = data.candidates[0].content.parts[0].text;
-            API_KEY_MANAGER.markKeyAsActive(API_KEY_MANAGER.getCurrentKeyIndex());
-            removeTypingIndicator();
-            addAIMessage(aiResponse);
-            conversation.push({
-              role: 'model',
-              parts: [{ text: aiResponse }]
-            });
-            successfulKeyIndex = API_KEY_MANAGER.getCurrentKeyIndex();
-            break;
-          } else {
-            lastError = 'Invalid response format from API';
-            break;
-          }
-        } catch (error) {
-          if (error.name === 'AbortError') {
-            lastError = 'Request cancelled';
-            break;
-          }
-          lastError = error.message;
-          API_KEY_MANAGER.markKeyAsError(API_KEY_MANAGER.getCurrentKeyIndex(), 'unknown_error');
-          const nextKeyIndex = API_KEY_MANAGER.switchToNextAvailableKey();
-          if (nextKeyIndex === -1) {
-            lastError = 'All keys not available';
-            // Reset to Key 1
-            API_KEY_MANAGER.keys.forEach(k => k.status = 'idle');
-            API_KEY_MANAGER.currentKeyIndex = 0;
-            if (API_KEY_MANAGER.keys.length > 0) {
-              API_KEY_MANAGER.keys[0].status = 'idle';
-            }
-            API_KEY_MANAGER.updateUI();
-            break;
-          }
-          showToast(`Error occurred, trying next key...`);
-          continue;
-        }
-      }
-
-      if (lastError && successfulKeyIndex === -1) {
-        removeTypingIndicator();
-        addAIMessage(`I encountered an error: ${lastError}`);
-        showToast(lastError);
-      }
-
-      isGenerating = false;
-      sendBtn.disabled = false;
-      stopBtn.classList.remove('show');
-    }
-
-    // Event Listeners
-    sendBtn.addEventListener('click', sendMessage);
     stopBtn.addEventListener('click', () => {
-      if (abortController) {
-        abortController.abort();
-        removeTypingIndicator();
-        isGenerating = false;
-        sendBtn.disabled = false;
-        stopBtn.classList.remove('show');
-        showToast('Request stopped');
-      }
+      isStreamingResponse = false;
     });
 
-    chatInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-      }
-    });
-
-    chatInput.addEventListener('input', resizeTextarea);
-
-    // Initialize
-    API_KEY_MANAGER.init();
-    loadSettings();
+    loadCurrentKeyIndex();
   </script>
-</head>
+</body>
 
 </html>
