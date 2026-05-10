@@ -1193,6 +1193,7 @@
           attemptedKeysThisCycle.add(currentKeyIndex);
           if (attemptedKeysThisCycle.size >= API_KEYS.length) {
             hasCheckedAllKeysThisCycle = true;
+            showToast('All API keys are unavailable', 'error');
           }
           continue;
         }
@@ -1210,7 +1211,7 @@
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              systemInstruction: { parts: { text: systemPrompt } },
+              systemInstruction: { parts: [{ text: systemPrompt }] },
               contents: {
                 parts: [{ text: message }],
               },
@@ -1223,7 +1224,7 @@
           });
 
           if (!response.ok) {
-            const errorData = await response.json();
+            const errorData = await response.json().catch(() => ({}));
             let errorType = 'unknown_error';
 
             if (response.status === 429) {
@@ -1247,7 +1248,23 @@
           }
 
           const data = await response.json();
-          const aiMessage = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response received.';
+          
+          if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts || !data.candidates[0].content.parts[0] || !data.candidates[0].content.parts[0].text) {
+            keyStatuses[currentKeyIndex] = 'unknown_error';
+            updateKeyStatusDisplay(currentKeyIndex);
+            attemptedKeysThisCycle.add(currentKeyIndex);
+
+            if (attemptedKeysThisCycle.size >= API_KEYS.length) {
+              hasCheckedAllKeysThisCycle = true;
+              showToast('All API keys are unavailable', 'error');
+            }
+
+            currentKeyIndex = (currentKeyIndex + 1) % API_KEYS.length;
+            saveCurrentKeyIndex();
+            continue;
+          }
+
+          const aiMessage = data.candidates[0].content.parts[0].text;
 
           keyStatuses[currentKeyIndex] = 'active';
           updateKeyStatusDisplay(currentKeyIndex);
