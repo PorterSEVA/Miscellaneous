@@ -207,6 +207,7 @@
       gap: 6px;
       transition: all 0.2s ease;
       margin-top: 10px;
+      position: relative;
     }
 
     .req-btn:hover {
@@ -233,6 +234,21 @@
       cursor: not-allowed;
       opacity: 0.7;
       transform: none;
+    }
+
+    .error-tooltip {
+      position: absolute;
+      bottom: -30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.9);
+      color: var(--red);
+      font-size: 10px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+      z-index: 100;
+      pointer-events: none;
     }
 
     .m-list {
@@ -925,182 +941,213 @@
       }
     }
 
+    function getErrorMessage(error) {
+      if (error instanceof TypeError) {
+        return 'Network error';
+      }
+      return error.message || 'Unknown error';
+    }
+
     async function prepareDownload(id, name) {
       const btn = document.getElementById(`dl-${id}`);
+      const originalHTML = btn.innerHTML;
+
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
       btn.disabled = true;
-      btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> 0%';
 
       try {
         const info = await (await fetch(`${OASIS_API}/api/info?id=${id}`)).json();
         const proxy = `${OASIS_API}/api/proxy_download?url=${encodeURIComponent(info.stream_url)}&name=${encodeURIComponent(name)}`;
 
         const response = await fetch(proxy);
-        const reader = response.body.getReader();
-        const total = Number(response.headers.get('Content-Length'));
-
-        let loaded = 0;
-        const chunks = [];
-
-        while (true) {
-          const {
-            done,
-            value
-          } = await reader.read();
-          if (done) break;
-          chunks.push(value);
-          loaded += value.length;
-          if (total) {
-            btn.innerHTML = `<i class="fas fa-circle-notch fa-spin"></i> ${Math.round((loaded / total) * 100)}%`;
-          }
+        
+        if (!response.ok) {
+          const errorMsg = `HTTP ${response.status}: ${response.statusText}`;
+          throw new Error(errorMsg);
         }
 
-        preparedBlobs[id] = new Blob(chunks, {
-          type: 'video/mp4'
-        });
+        const reader = response.body.getReader();
+        const chunks = [];
+        let receivedLength = 0;
+        const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          receivedLength += value.length;
+        }
+
+        preparedBlobs[id] = new Blob(chunks, { type: 'video/mp4' });
+        btn.innerHTML = '<i class="fas fa-check"></i> Click to save';
         btn.disabled = false;
-        btn.className = 'req-btn save-btn';
-        btn.innerHTML = '<i class="fas fa-check"></i> Save File';
-        btn.onclick = () => saveFile(id, name);
-        toast('Ready to save!');
-      } catch (e) {
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          saveFile(id, name, btnId=`dl-${id}`, originalHTML);
+        };
+      } catch (error) {
+        const errorMsg = getErrorMessage(error);
+        btn.innerHTML = `<i class="fas fa-exclamation-triangle"></i> <span>Failed</span><div class="error-tooltip">${errorMsg}</div>`;
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-rotate-right"></i> Retry';
-        toast('Download failed — please try again.');
+        setTimeout(() => {
+          btn.innerHTML = originalHTML;
+          btn.onclick = (e) => {
+            e.stopPropagation();
+            prepareDownload(id, name);
+          };
+        }, 5000);
       }
     }
 
-    async function saveFile(id, name) {
+    async function saveFile(id, name, btnId, originalHTML) {
+      const btn = document.getElementById(btnId);
       const blob = preparedBlobs[id];
       const filename = name.replace(/[^a-z0-9]/gi, '_') + '.mp4';
 
-      if ('showSaveFilePicker' in window) {
-        try {
+      try {
+        if ('showSaveFilePicker' in window) {
           const handle = await window.showSaveFilePicker({
-            suggestedName: filename
+            suggestedName: filename,
+            types: [{
+              description: 'Video File',
+              accept: {
+                'video/*': ['.mp4']
+              }
+            }]
           });
+
           const writable = await handle.createWritable();
           await writable.write(blob);
           await writable.close();
-          return;
-        } catch (e) {
-          // user cancelled — fall through to link download
-        }
-      }
 
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
+          btn.innerHTML = '<i class="fas fa-check-circle"></i> Saved';
+        } else {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          a.click();
+          URL.revokeObjectURL(url);
+
+          btn.innerHTML = '<i class="fas fa-check-circle"></i> Downloaded';
+        }
+
+        setTimeout(() => {
+          btn.innerHTML = originalHTML;
+          btn.onclick = (e) => {
+            e.stopPropagation();
+            prepareDownload(id, name);
+          };
+        }, 3000);
+      } catch (error) {
+        const errorMsg = getErrorMessage(error);
+        btn.innerHTML = `<i class="fas fa-exclamation-triangle"></i> <span>Error</span><div class="error-tooltip">${errorMsg}</div>`;
+        setTimeout(() => {
+          btn.innerHTML = originalHTML;
+          btn.onclick = (e) => {
+            e.stopPropagation();
+            prepareDownload(id, name);
+          };
+        }, 5000);
+      }
     }
 
     function wireSearch(inpId, clrId, searchFn, resetFn) {
       const inp = document.getElementById(inpId);
       const clr = document.getElementById(clrId);
-      const hint = document.getElementById('hint-' + inpId);
+      const hint = document.getElementById(`hint-${inpId}`);
 
-      inp.oninput = () => {
-        clr.style.display = inp.value ? 'block' : 'none';
-
-        if (hint) {
-          hint.style.display = (inp.value.length > 0 && inp.value.length <= 2) ? 'block' : 'none';
-        }
-
-        clearTimeout(timers[inpId]);
-
-        if (inp.value.length > 2) {
-          timers[inpId] = setTimeout(() => searchFn(inp.value), 600);
-        } else if (!inp.value) {
+      inp.addEventListener('input', () => {
+        if (inp.value.length > 0) {
+          clr.style.display = 'block';
+          if (inp.value.length >= 3) {
+            hint.style.display = 'none';
+            searchFn(inp.value);
+          } else {
+            hint.style.display = 'block';
+          }
+        } else {
+          clr.style.display = 'none';
+          hint.style.display = 'none';
           resetFn();
         }
-      };
+      });
 
-      clr.onclick = () => {
+      clr.addEventListener('click', () => {
         inp.value = '';
+        inp.focus();
         clr.style.display = 'none';
-        if (hint) hint.style.display = 'none';
+        hint.style.display = 'none';
         resetFn();
-      };
+      });
     }
 
-    wireSearch(
-      'sq-music', 'sc-music',
-      q => searchMusic(q),
-      () => loadMusicCharts()
-    );
+    function tabSwitch(tabName) {
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('on'));
 
-    wireSearch(
-      'sq-yt', 'sc-yt',
-      q => searchYT(q),
-      () => {
+      document.getElementById(`tab-${tabName}`).classList.add('active');
+      event.target.closest('.nav-btn').classList.add('on');
+
+      curTab = tabName;
+    }
+
+    function toast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.classList.add('on');
+      clearTimeout(timers.toast);
+      timers.toast = setTimeout(() => el.classList.remove('on'), 3000);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          tabSwitch(btn.dataset.tab);
+        });
+      });
+
+      wireSearch('sq-music', 'sc-music', searchMusic, loadMusicCharts);
+      wireSearch('sq-yt', 'sc-yt', searchYT, () => {
         document.getElementById('res-yt').innerHTML = '';
+        document.getElementById('yt-empty').style.display = 'flex';
         document.getElementById('lbl-yt').style.display = 'none';
-        document.getElementById('yt-empty').style.display = 'block';
-      }
-    );
+      });
 
-    document.querySelectorAll('.nav-btn').forEach(btn => {
-      btn.onclick = () => {
-        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('on'));
-        btn.classList.add('on');
-        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
-        curTab = btn.dataset.tab;
-      };
-    });
-
-    document.getElementById('yt-ov-close').onclick = () => {
-      const vid = document.getElementById('player-vid');
-      vid.pause();
-      vid.src = '';
-      document.getElementById('yt-ov').classList.remove('on');
-    };
-
-    audio.ontimeupdate = () => {
-      const pct = audio.duration ? (audio.currentTime / audio.duration) * 100 : 0;
-      document.getElementById('mini-prog').style.width = pct + '%';
-    };
-
-    audio.onended = () => {
-      const skipped = skipTrack(1);
-      if (!skipped) {
-        isPlaying = false;
-        syncMusicUI();
-      }
-    };
-
-    document.getElementById('mini-btn').onclick = () => {
-      if (isPlaying) {
+      document.getElementById('mini-close').addEventListener('click', () => {
         audio.pause();
-      } else {
-        audio.play();
-      }
-      isPlaying = !isPlaying;
-      syncMusicUI();
-    };
+        isPlaying = false;
+        document.getElementById('mini').classList.remove('on');
+        syncMusicUI();
+      });
 
-    document.getElementById('mini-prev').onclick = () => skipTrack(-1);
-    document.getElementById('mini-next').onclick = () => skipTrack(1);
+      document.getElementById('mini-btn').addEventListener('click', () => {
+        if (isPlaying) {
+          audio.pause();
+          isPlaying = false;
+        } else {
+          audio.play();
+          isPlaying = true;
+        }
+        syncMusicUI();
+      });
 
-    document.getElementById('mini-close').onclick = () => {
-      audio.pause();
-      isPlaying = false;
-      playingId = null;
-      document.getElementById('mini').classList.remove('on');
-      syncMusicUI();
-    };
+      document.getElementById('mini-prev').addEventListener('click', () => {
+        skipTrack(-1);
+      });
 
-    loadMusicCharts();
+      document.getElementById('mini-next').addEventListener('click', () => {
+        skipTrack(1);
+      });
 
-    (() => {
-      const ENTRY = 'Media Hub v4',
-        KEY = 'Ion-o-koji Watermark';
-      const logs = (localStorage.getItem(KEY) || "").split('\n').map(line => line.replace(/^- /, '').trim()).filter(line => line && line !== ENTRY);
-      logs.push(ENTRY);
-      localStorage.setItem(KEY, logs.map(item => `- ${item}`).join('\n'));
-    })();
+      document.getElementById('yt-ov-close').addEventListener('click', () => {
+        document.getElementById('player-vid').pause();
+        document.getElementById('yt-ov').classList.remove('on');
+      });
 
+      tabSwitch('music');
+      loadMusicCharts();
+    });
   </script>
 </body>
 
