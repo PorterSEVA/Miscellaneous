@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<!-- Ion-o-koji -->
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Media Hub v4</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    :root {
+      --bg: #0A0A0B;
+      --surface: #131316;
+      --card: #1C1C20;
+      --border: #2A2A2F;
+      --text: #F0F0F0;
+      --text-sec: #7E7E86;
+      --accent: #FF6B4A;
+      --accent-h: #FF8566;
+      --accent-glow: rgba(255, 107, 74, 0.15);
+      --green: #4ADE80;
+      --yellow: #FBBF24;
+      --red: #EF4444;
+      --nav-h: 68px;
+      --player-h: 76px;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #app {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .blob {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(90px);
+      opacity: 0.12;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .blob-1 {
+      width: 280px;
+      height: 280px;
+      background: var(--accent);
+      top: -80px;
+      right: -40px;
+    }
+
+    .blob-2 {
+      width: 220px;
+      height: 220px;
+      background: #06B6D4;
+      bottom: 120px;
+      left: -70px;
+    }
+
+    .app-header {
+      height: 52px;
+      display: flex;
+      align-items: center;
+      padding: 0 18px;
+      position: relative;
+      z-index: 10;
+      flex-shrink: 0;
+    }
+
+    .app-header h1 {
+      font-size: 21px;
+      font-weight: 800;
+      letter-spacing: -0.4px;
+    }
+
+    .app-header h1 span {
+      color: var(--accent);
+    }
+
+    .tab-content {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+      z-index: 5;
+    }
+
+    .tab-panel {
+      display: none;
+      height: 100%;
+      overflow-y: auto;
+      padding: 0 14px calc(var(--nav-h) + 34px);
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .tab-panel.active {
+      display: block;
+      animation: fadeUp 0.3s ease;
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .search-wrap {
+      position: relative;
+      margin-bottom: 6px;
+      margin-top: 14px;
+    }
+
+    .search-bar {
+      width: 100%;
+      height: 46px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 0 40px 0 38px;
+      font-family: 'Outfit', sans-serif;
+      font-size: 14px;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.25s;
+    }
+
+    .search-bar:focus {
+      border-color: var(--accent);
+    }
+
+    .s-icon {
+      position: absolute;
+      left: 13px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-sec);
+      font-size: 13px;
+    }
+
+    .s-clear {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--text-sec);
+      display: none;
+      padding: 6px;
+      cursor: pointer;
+    }
+
+    .search-hint {
+      font-size: 12px;
+      color: var(--text-sec);
+      padding: 4px 6px 10px;
+      display: none;
+    }
+
+    .sec-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-sec);
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .req-btn {
+      width: 100%;
+      height: 36px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 9px;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+      margin-top: 10px;
+    }
+
+    .req-btn:hover {
+      background: var(--accent-h);
+    }
+
+    .req-btn:active {
+      transform: scale(0.96);
+    }
+
+    .req-btn.secondary {
+      background: #272727;
+      color: var(--text);
+    }
+
+    .req-btn.save-btn {
+      background: var(--green);
+      color: #000;
+    }
+
+    .req-btn:disabled {
+      background: var(--border);
+      color: var(--text-sec);
+      cursor: not-allowed;
+      opacity: 0.7;
+      transform: none;
+    }
+
+    .m-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .m-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      background: var(--card);
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .m-item.playing {
+      border-color: var(--accent);
+      background: rgba(255, 107, 74, 0.05);
+    }
+
+    .m-art {
+      width: 52px;
+      height: 52px;
+      border-radius: 8px;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+
+    .m-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .m-title {
+      font-size: 13.5px;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .m-artist {
+      font-size: 11.5px;
+      color: var(--text-sec);
+      margin-bottom: 8px;
+    }
+
+    .m-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .m-actions .req-btn {
+      margin-top: 0;
+      height: 32px;
+    }
+
+    .m-play {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+
+    .m-play:hover {
+      background: var(--accent-h);
+    }
+
+    .yt-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .yt-item {
+      background: var(--card);
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .yt-thumb-wrap {
+      position: relative;
+      cursor: pointer;
+    }
+
+    .yt-thumb {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+      display: block;
+    }
+
+    .yt-dur {
+      position: absolute;
+      bottom: 8px;
+      right: 8px;
+      background: rgba(0, 0, 0, 0.8);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .yt-body {
+      padding: 12px;
+    }
+
+    .yt-uploader {
+      font-size: 11.5px;
+      color: var(--text-sec);
+      margin-top: 3px;
+      margin-bottom: 0;
+    }
+
+    .yt-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .yt-actions .req-btn {
+      margin-top: 0;
+    }
+
+    .yt-empty {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-sec);
+    }
+
+    .yt-empty i {
+      font-size: 40px;
+      margin-bottom: 12px;
+      opacity: 0.3;
+      display: block;
+    }
+
+    .mini {
+      position: fixed;
+      bottom: var(--nav-h);
+      left: 0;
+      right: 0;
+      height: var(--player-h);
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: none;
+      align-items: center;
+      padding: 0 12px;
+      gap: 10px;
+      z-index: 25;
+    }
+
+    .mini.on {
+      display: flex;
+    }
+
+    .mini-prog {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 2px;
+      background: var(--accent);
+      transition: width 0.3s linear;
+    }
+
+    .mini-close {
+      position: absolute;
+      top: 6px;
+      right: 8px;
+      background: none;
+      border: none;
+      color: var(--text-sec);
+      font-size: 11px;
+      cursor: pointer;
+      padding: 2px 5px;
+      border-radius: 4px;
+      line-height: 1;
+    }
+
+    .mini-close:hover {
+      color: var(--text);
+    }
+
+    .mini-art {
+      width: 44px;
+      height: 44px;
+      border-radius: 6px;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+
+    .mini-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .mini-track {
+      font-size: 12px;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .mini-artist {
+      font-size: 10px;
+      color: var(--text-sec);
+      margin-top: 2px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .mini-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .mini-ctrl {
+      width: 32px;
+      height: 32px;
+      background: none;
+      border: none;
+      color: var(--text-sec);
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      border-radius: 50%;
+      transition: color 0.2s, background 0.2s;
+    }
+
+    .mini-ctrl:hover {
+      color: var(--text);
+      background: var(--card);
+    }
+
+    .mini-ctrl.play-pause {
+      width: 36px;
+      height: 36px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 14px;
+    }
+
+    .mini-ctrl.play-pause:hover {
+      background: var(--accent-h);
+    }
+
+    .yt-ov {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      z-index: 110;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .yt-ov.on {
+      display: flex;
+    }
+
+    .yt-ov-close {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: rgba(255, 255, 255, 0.1);
+      border: none;
+      color: #fff;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      cursor: pointer;
+      z-index: 120;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+
+    .yt-ov-close:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .bottom-nav {
+      height: var(--nav-h);
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      position: relative;
+      z-index: 20;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    .nav-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      background: none;
+      border: none;
+      color: var(--text-sec);
+      cursor: pointer;
+      flex: 1;
+      transition: color 0.2s;
+    }
+
+    .nav-btn.on {
+      color: var(--accent);
+    }
+
+    .nav-btn i {
+      font-size: 18px;
+    }
+
+    .nav-btn span {
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    .toast {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-100px);
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: #fff;
+      padding: 12px 24px;
+      border-radius: 14px;
+      font-size: 13px;
+      font-weight: 600;
+      z-index: 200;
+      transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      pointer-events: none;
+    }
+
+    .toast.on {
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .skeleton {
+      background: linear-gradient(90deg, #1c1c20 25%, #2a2a2f 50%, #1c1c20 75%);
+      background-size: 200% 100%;
+      animation: shim 1.5s infinite;
+      border-radius: 8px;
+    }
+
+    @keyframes shim {
+      0% {
+        background-position: 200% 0;
+      }
+
+      100% {
+        background-position: -200% 0;
+      }
+    }
+
+    .err-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-sec);
+    }
+
+    .err-state i {
+      font-size: 36px;
+      margin-bottom: 12px;
+      opacity: 0.35;
+      display: block;
+    }
+
+    .err-state p {
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+  </style>
+</head>
+
+<body>
+
+  <div id="app">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+
+    <header class="app-header">
+      <h1>Media<span>Hub</span> v4</h1>
+    </header>
+
+    <main class="tab-content">
+
+      <section id="tab-music" class="tab-panel">
+        <div class="search-wrap">
+          <i class="fas fa-search s-icon"></i>
+          <input type="text" class="search-bar" id="sq-music" placeholder="Search songs...">
+          <button class="s-clear" id="sc-music"><i class="fas fa-times"></i></button>
+        </div>
+        <p class="search-hint" id="hint-sq-music">Keep typing — search starts after 3 characters</p>
+        <div class="sec-label" id="lbl-music">Top Charts</div>
+        <div class="m-list" id="res-music"></div>
+      </section>
+
+      <section id="tab-youtube" class="tab-panel">
+        <div class="search-wrap">
+          <i class="fas fa-search s-icon"></i>
+          <input type="text" class="search-bar" id="sq-yt" placeholder="Search videos...">
+          <button class="s-clear" id="sc-yt"><i class="fas fa-times"></i></button>
+        </div>
+        <p class="search-hint" id="hint-sq-yt">Keep typing — search starts after 3 characters</p>
+        <div class="sec-label" id="lbl-yt" style="display:none"></div>
+        <div class="yt-list" id="res-yt"></div>
+        <div class="yt-empty" id="yt-empty">
+          <i class="fab fa-youtube"></i>
+          <p>Search YouTube to play or download</p>
+        </div>
+      </section>
+
+    </main>
+
+    <div class="det-ov" id="det-ov">
+      <div class="det-panel" id="det-panel">
+        <div class="det-handle"></div>
+        <div id="det-inner"></div>
+      </div>
+    </div>
+
+    <div class="yt-ov" id="yt-ov">
+      <video id="player-vid" style="width:100%; aspect-ratio:16/9" controls playsinline></video>
+      <button class="yt-ov-close" id="yt-ov-close"><i class="fas fa-times"></i></button>
+    </div>
+
+    <div class="mini" id="mini">
+      <div class="mini-prog" id="mini-prog"></div>
+      <button class="mini-close" id="mini-close" title="Close player"><i class="fas fa-times"></i></button>
+      <img class="mini-art" id="mini-art" src="" alt="">
+      <div class="mini-info">
+        <div class="mini-track" id="mini-t"></div>
+        <div class="mini-artist" id="mini-a"></div>
+      </div>
+      <div class="mini-controls">
+        <button class="mini-ctrl" id="mini-prev" title="Previous"><i class="fas fa-backward-step"></i></button>
+        <button class="mini-ctrl play-pause" id="mini-btn" title="Play / Pause"><i class="fas fa-pause"></i></button>
+        <button class="mini-ctrl" id="mini-next" title="Next"><i class="fas fa-forward-step"></i></button>
+      </div>
+    </div>
+
+    <nav class="bottom-nav">
+      <button class="nav-btn" data-tab="music"><i class="fas fa-music"></i><span>Music</span></button>
+      <button class="nav-btn" data-tab="youtube"><i class="fab fa-youtube"></i><span>YouTube</span></button>
+    </nav>
+    <div class="toast" id="toast"></div>
+  </div>
+
+  <script>
+    const TMDB_KEY = '3cd619a47f16423b8ba2855b4849bce8';
+    const TMDB = 'https://api.themoviedb.org/3';
+    const IMG = 'https://image.tmdb.org/t/p/w500';
+    const OASIS_API = 'https://tube.oasis-archive.org';
+
+    let curTab = '';
+    let playingId = null;
+    let isPlaying = false;
+    let trackOrder = [];
+
+    const audio = new Audio();
+    const trackMap = {};
+    const timers = {};
+    const preparedBlobs = {};
+
+    function formatDuration(secs) {
+      if (!secs) return '0:00';
+      const h = Math.floor(secs / 3600);
+      const m = Math.floor((secs % 3600) / 60);
+      const s = Math.floor(secs % 60);
+      const mm = m.toString().padStart(2, '0');
+      const ss = s.toString().padStart(2, '0');
+      return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
+    }
+
+    function dzFetch(url) {
+      return new Promise((resolve, reject) => {
+        const cb = 'dz_' + Math.random().toString(36).slice(5);
+        const script = document.createElement('script');
+        window[cb] = data => {
+          resolve(data);
+          script.remove();
+          delete window[cb];
+        };
+        script.onerror = () => {
+          reject(new Error('JSONP failed'));
+          script.remove();
+          delete window[cb];
+        };
+        script.src = `${url}${url.includes('?') ? '&' : '?'}output=jsonp&callback=${cb}`;
+        document.head.appendChild(script);
+      });
+    }
+
+    async function loadMusicCharts() {
+      const el = document.getElementById('res-music');
+      document.getElementById('lbl-music').textContent = 'Top Charts';
+      el.innerHTML = Array(5).fill(
+        '<div class="skeleton" style="height:80px; border-radius:14px; margin-bottom:8px;"></div>'
+      ).join('');
+
+      try {
+        const data = await dzFetch('https://api.deezer.com/chart');
+        renderMusic(el, data.tracks.data);
+      } catch (e) {
+        el.innerHTML = `
+        <div class="err-state">
+          <i class="fas fa-triangle-exclamation"></i>
+          <p>Couldn't load music charts.<br>Try again.</p>
+        </div>`;
+      }
+    }
+
+    async function searchMusic(q) {
+      const el = document.getElementById('res-music');
+      document.getElementById('lbl-music').textContent = `Results for "${q}"`;
+      el.innerHTML = Array(5).fill(
+        '<div class="skeleton" style="height:80px; border-radius:14px; margin-bottom:8px;"></div>'
+      ).join('');
+
+      try {
+        const data = await dzFetch(`https://api.deezer.com/search?q=${encodeURIComponent(q)}`);
+        renderMusic(el, data.data);
+      } catch (e) {
+        el.innerHTML = `
+        <div class="err-state">
+          <i class="fas fa-triangle-exclamation"></i>
+          <p>Search failed.<br>Try again.</p>
+        </div>`;
+      }
+    }
+
+    function renderMusic(el, tracks) {
+      trackOrder = tracks.map(t => t.id);
+      el.innerHTML = tracks.map(t => {
+        trackMap[t.id] = {
+          title: t.title,
+          artist: t.artist.name,
+          cover: t.album.cover_medium,
+          preview: t.preview,
+        };
+        const safeTitle = t.title.replace(/'/g, "\\'");
+        return `
+        <div class="m-item" id="track-${t.id}">
+          <img class="m-art" src="${t.album.cover_medium}" alt="${t.title}">
+          <div class="m-info">
+            <div class="m-title">${t.title}</div>
+            <div class="m-artist">${t.artist.name}</div>
+            <div class="m-actions">
+              <button class="m-play" onclick="toggleTrack(${t.id})">
+                <i class="fas fa-play"></i>
+              </button>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function toggleTrack(id) {
+      const t = trackMap[id];
+      if (playingId === id && isPlaying) {
+        audio.pause();
+        isPlaying = false;
+      } else {
+        audio.src = t.preview;
+        audio.play();
+        playingId = id;
+        isPlaying = true;
+        document.getElementById('mini-t').textContent = t.title;
+        document.getElementById('mini-a').textContent = t.artist;
+        document.getElementById('mini-art').src = t.cover;
+        document.getElementById('mini').classList.add('on');
+      }
+      syncMusicUI();
+    }
+
+    function syncMusicUI() {
+      document.querySelectorAll('.m-item').forEach(el => el.classList.remove('playing'));
+      document.querySelectorAll('.m-play i').forEach(i => {
+        i.className = 'fas fa-play';
+      });
+
+      if (isPlaying && playingId) {
+        const row = document.getElementById(`track-${playingId}`);
+        if (row) {
+          row.classList.add('playing');
+          row.querySelector('.m-play i').className = 'fas fa-pause';
+        }
+        document.getElementById('mini-btn').innerHTML = '<i class="fas fa-pause"></i>';
+      } else {
+        document.getElementById('mini-btn').innerHTML = '<i class="fas fa-play"></i>';
+      }
+    }
+
+    function skipTrack(dir) {
+      if (!trackOrder.length) return false;
+      const idx = trackOrder.indexOf(playingId);
+      const next = trackOrder[idx + dir];
+      if (next != null) {
+        toggleTrack(next);
+        return true;
+      }
+      return false;
+    }
+
+    async function searchYT(q) {
+      const el = document.getElementById('res-yt');
+      const lbl = document.getElementById('lbl-yt');
+      document.getElementById('yt-empty').style.display = 'none';
+      lbl.style.display = 'none';
+      el.innerHTML = Array(3).fill(
+        '<div class="yt-item" style="height:200px"><div class="skeleton" style="height:100%"></div></div>'
+      ).join('');
+
+      try {
+        const res = await fetch(`${OASIS_API}/api/search?q=${encodeURIComponent(q)}`);
+        const videos = await res.json();
+
+        lbl.textContent = `Results for "${q}"`;
+        lbl.style.display = 'flex';
+
+        el.innerHTML = videos.map(v => {
+          const id = v.id || v.video_id;
+          const safeTitle = v.title.replace(/'/g, "\\'");
+          const thumb = v.thumbnail || v.thumbnails?.[0]?.url || '';
+          const uploader = v.uploader || '';
+          const views = v.view_count || v.views || '';
+          return `
+          <div class="yt-item">
+            <div class="yt-thumb-wrap" onclick="playYT('${id}')">
+              <img class="yt-thumb" src="${thumb}" alt="${v.title}" loading="lazy">
+              <span class="yt-dur">${formatDuration(v.duration)}</span>
+            </div>
+            <div class="yt-body">
+              <div class="m-title">${v.title}</div>
+              <div class="yt-uploader">${uploader}${views ? ` · ${views} views` : ''}</div>
+              <div class="yt-actions">
+                <button class="req-btn secondary" id="dl-${id}" onclick="prepareDownload('${id}', '${safeTitle}')">
+                  <i class="fas fa-download"></i> Download
+                </button>
+              </div>
+            </div>
+          </div>`;
+        }).join('');
+      } catch (e) {
+        lbl.style.display = 'none';
+        el.innerHTML = `
+        <div class="err-state">
+          <i class="fab fa-youtube"></i>
+          <p>Video search is unavailable right now.<br>Try again later.</p>
+        </div>`;
+      }
+    }
+
+    async function playYT(id) {
+      try {
+        const res = await fetch(`${OASIS_API}/api/info?id=${id}`);
+        const data = await res.json();
+        const vid = document.getElementById('player-vid');
+        vid.src = data.stream_url;
+        document.getElementById('yt-ov').classList.add('on');
+        vid.play();
+      } catch (e) {
+        toast('Playback error — try again.');
+      }
+    }
+
+    async function prepareDownload(id, name) {
+      const btn = document.getElementById(`dl-${id}`);
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> 0%';
+
+      try {
+        const info = await (await fetch(`${OASIS_API}/api/info?id=${id}`)).json();
+        const proxy = `${OASIS_API}/api/proxy_download?url=${encodeURIComponent(info.stream_url)}&name=${encodeURIComponent(name)}`;
+
+        const response = await fetch(proxy);
+        const reader = response.body.getReader();
+        const total = Number(response.headers.get('Content-Length'));
+
+        let loaded = 0;
+        const chunks = [];
+
+        while (true) {
+          const {
+            done,
+            value
+          } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          loaded += value.length;
+          if (total) {
+            btn.innerHTML = `<i class="fas fa-circle-notch fa-spin"></i> ${Math.round((loaded / total) * 100)}%`;
+          }
+        }
+
+        preparedBlobs[id] = new Blob(chunks, {
+          type: 'video/mp4'
+        });
+        btn.disabled = false;
+        btn.className = 'req-btn save-btn';
+        btn.innerHTML = '<i class="fas fa-check"></i> Save File';
+        btn.onclick = () => saveFile(id, name);
+        toast('Ready to save!');
+      } catch (e) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-rotate-right"></i> Retry';
+        toast('Download failed — please try again.');
+      }
+    }
+
+    async function saveFile(id, name) {
+      const blob = preparedBlobs[id];
+      const filename = name.replace(/[^a-z0-9]/gi, '_') + '.mp4';
+
+      if ('showSaveFilePicker' in window) {
+        try {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: filename
+          });
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          return;
+        } catch (e) {
+          // user cancelled — fall through to link download
+        }
+      }
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function wireSearch(inpId, clrId, searchFn, resetFn) {
+      const inp = document.getElementById(inpId);
+      const clr = document.getElementById(clrId);
+      const hint = document.getElementById('hint-' + inpId);
+
+      inp.oninput = () => {
+        clr.style.display = inp.value ? 'block' : 'none';
+
+        if (hint) {
+          hint.style.display = (inp.value.length > 0 && inp.value.length <= 2) ? 'block' : 'none';
+        }
+
+        clearTimeout(timers[inpId]);
+
+        if (inp.value.length > 2) {
+          timers[inpId] = setTimeout(() => searchFn(inp.value), 600);
+        } else if (!inp.value) {
+          resetFn();
+        }
+      };
+
+      clr.onclick = () => {
+        inp.value = '';
+        clr.style.display = 'none';
+        if (hint) hint.style.display = 'none';
+        resetFn();
+      };
+    }
+
+    wireSearch(
+      'sq-music', 'sc-music',
+      q => searchMusic(q),
+      () => loadMusicCharts()
+    );
+
+    wireSearch(
+      'sq-yt', 'sc-yt',
+      q => searchYT(q),
+      () => {
+        document.getElementById('res-yt').innerHTML = '';
+        document.getElementById('lbl-yt').style.display = 'none';
+        document.getElementById('yt-empty').style.display = 'block';
+      }
+    );
+
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('on'));
+        btn.classList.add('on');
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+        curTab = btn.dataset.tab;
+      };
+    });
+
+    document.getElementById('yt-ov-close').onclick = () => {
+      const vid = document.getElementById('player-vid');
+      vid.pause();
+      vid.src = '';
+      document.getElementById('yt-ov').classList.remove('on');
+    };
+
+    audio.ontimeupdate = () => {
+      const pct = audio.duration ? (audio.currentTime / audio.duration) * 100 : 0;
+      document.getElementById('mini-prog').style.width = pct + '%';
+    };
+
+    audio.onended = () => {
+      const skipped = skipTrack(1);
+      if (!skipped) {
+        isPlaying = false;
+        syncMusicUI();
+      }
+    };
+
+    document.getElementById('mini-btn').onclick = () => {
+      if (isPlaying) {
+        audio.pause();
+      } else {
+        audio.play();
+      }
+      isPlaying = !isPlaying;
+      syncMusicUI();
+    };
+
+    document.getElementById('mini-prev').onclick = () => skipTrack(-1);
+    document.getElementById('mini-next').onclick = () => skipTrack(1);
+
+    document.getElementById('mini-close').onclick = () => {
+      audio.pause();
+      isPlaying = false;
+      playingId = null;
+      document.getElementById('mini').classList.remove('on');
+      syncMusicUI();
+    };
+
+    loadMusicCharts();
+
+    (() => {
+      const ENTRY = 'Media Hub v4',
+        KEY = 'Ion-o-koji Watermark';
+      const logs = (localStorage.getItem(KEY) || "").split('\n').map(line => line.replace(/^- /, '').trim()).filter(line => line && line !== ENTRY);
+      logs.push(ENTRY);
+      localStorage.setItem(KEY, logs.map(item => `- ${item}`).join('\n'));
+    })();
+
+  </script>
+</body>
+
+</html>
