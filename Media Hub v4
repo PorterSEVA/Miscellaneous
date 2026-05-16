@@ -678,7 +678,7 @@
           <input type="text" class="search-bar" id="sq-yt" placeholder="Search videos...">
           <button class="s-clear" id="sc-yt"><i class="fas fa-times"></i></button>
         </div>
-        <p class="search-hint" id="hint-sq-yt">Keep typing — search starts after 3 characters</p>
+        <p class="search-hint" id="hint-sq-yt">Press enter to search</p>
         <div class="sec-label" id="lbl-yt" style="display:none"></div>
         <div class="yt-list" id="res-yt"></div>
         <div class="yt-empty" id="yt-empty">
@@ -1083,6 +1083,35 @@
       });
     }
 
+    function wireYTSearch() {
+      const inp = document.getElementById('sq-yt');
+      const clr = document.getElementById('sc-yt');
+      const hint = document.getElementById('hint-sq-yt');
+
+      inp.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && inp.value.length > 0) {
+          searchYT(inp.value);
+        }
+      });
+
+      inp.addEventListener('input', () => {
+        if (inp.value.length > 0) {
+          clr.style.display = 'block';
+        } else {
+          clr.style.display = 'none';
+        }
+      });
+
+      clr.addEventListener('click', () => {
+        inp.value = '';
+        inp.focus();
+        clr.style.display = 'none';
+        document.getElementById('res-yt').innerHTML = '';
+        document.getElementById('yt-empty').style.display = 'flex';
+        document.getElementById('lbl-yt').style.display = 'none';
+      });
+    }
+
     function tabSwitch(tabName) {
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('on'));
@@ -1109,11 +1138,7 @@
       });
 
       wireSearch('sq-music', 'sc-music', searchMusic, loadMusicCharts);
-      wireSearch('sq-yt', 'sc-yt', searchYT, () => {
-        document.getElementById('res-yt').innerHTML = '';
-        document.getElementById('yt-empty').style.display = 'flex';
-        document.getElementById('lbl-yt').style.display = 'none';
-      });
+      wireYTSearch();
 
       document.getElementById('mini-close').addEventListener('click', () => {
         audio.pause();
