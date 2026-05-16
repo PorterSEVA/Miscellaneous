@@ -740,7 +740,7 @@
     const preparedBlobs = {};
 
     function formatDuration(secs) {
-      if (!secs) return '0:00';
+      if (!secs || isNaN(secs)) return '0:00';
       const h = Math.floor(secs / 3600);
       const m = Math.floor((secs % 3600) / 60);
       const s = Math.floor(secs % 60);
@@ -901,11 +901,12 @@
           const thumb = v.thumbnail || v.thumbnails?.[0]?.url || '';
           const uploader = v.uploader || '';
           const views = v.view_count || v.views || '';
+          const duration = parseInt(v.duration) || 0;
           return `
           <div class="yt-item">
             <div class="yt-thumb-wrap" onclick="playYT('${id}')">
               <img class="yt-thumb" src="${thumb}" alt="${v.title}" loading="lazy">
-              <span class="yt-dur">${formatDuration(v.duration)}</span>
+              <span class="yt-dur">${formatDuration(duration)}</span>
             </div>
             <div class="yt-body">
               <div class="m-title">${v.title}</div>
@@ -1144,9 +1145,6 @@
         document.getElementById('player-vid').pause();
         document.getElementById('yt-ov').classList.remove('on');
       });
-
-      tabSwitch('music');
-      loadMusicCharts();
     });
   </script>
 </body>
